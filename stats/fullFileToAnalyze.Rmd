@@ -1,0 +1,2283 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+This is the statistics file for the article entitled "Pupillary dynamics reflect age-related changes in memory encoding"
+
+```{r}
+if (!require("afex")) install.packages("afex")
+if (!require("emmeans")) install.packages("emmeans")
+if (!require("tidyr")) install.packages("tidyr")
+if (!require("dplyr")) install.packages("dplyr")
+if (!requireNamespace("effsize", quietly = TRUE)) {
+  install.packages("effsize")
+}
+if (!require("readxl")) install.packages("readxl")
+if (!require("ggplot2")) install.packages("ggplot2")
+
+library(afex)
+library(emmeans)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(effsize)
+library(ggplot2)
+
+data_full <- read_excel("C:/Users/ruiz/Desktop/Analyses GLM/EyeCog/Vfinal/fullFileToAnalyze.xlsx")
+
+# ---- Création des sous-ensembles ---- Creation of data subsets
+
+# Categorization task
+data_CATEGORISATION <- data_full %>%
+  filter(Categorisation == 1)
+
+# Fixation task
+data_FIXATION <- data_full %>%
+  filter(Fixation == 1)
+
+```
+
+
+```{r}
+variables <- c(
+  "Fix: Diametre basal moyen (u.a.)",
+  "Fix: Fluctuations du diametre basal (u.a.)",
+  "Cat: Taux de reconnaissance(%)",
+  "Cat: Taux de bonne categorisation (%)",
+  "Cat: Temps de réponse moyen (ms)",
+  "Cat: Amplitude maximale de dilatation (u.a.)",
+  "Cat: Vitesse de dilatation (u.a./s)",
+  "Cat: Dilatation moyenne (u.a.)",
+  "Cat: Variabilité de dilatation (u.a.)"
+)
+
+data_CATEGORISATION[variables] <- lapply(data_CATEGORISATION[variables], function(col) as.numeric(as.character(col)))
+data_FIXATION[variables]       <- lapply(data_FIXATION[variables], function(col) as.numeric(as.character(col)))
+
+
+results <- data.frame(
+  Condition   = character(),
+  t_value     = numeric(),
+  df          = numeric(),
+  p_value     = numeric(),
+  test_type   = character(),
+  data_set    = character(),
+  cohen_d     = numeric(),
+  stringsAsFactors = FALSE
+)
+
+
+## 1. t-test (var.equal = TRUE)
+t1 <- t.test(`Fix: Diametre basal moyen (u.a.)` ~ groupe, 
+             data = data_FIXATION, var.equal = TRUE, alternative = "less")
+d1 <- cohen.d(`Fix: Diametre basal moyen (u.a.)` ~ groupe, data = data_FIXATION)
+
+results <- rbind(results, data.frame(
+  Condition = "Fix: Diametre basal moyen (u.a.)",
+  t_value   = round(t1$statistic, 4),
+  df        = round(t1$parameter, 2),
+  p_value   = round(t1$p.value, 15),
+  test_type = "t-test (classique, less)",
+  data_set  = "data_FIXATION",
+  cohen_d   = round(d1$estimate, 3)
+))
+
+## 2. Welch t-test (var.equal = FALSE)
+t2 <- t.test(`Fix: Fluctuations du diametre basal (u.a.)` ~ groupe, 
+             data = data_FIXATION, var.equal = FALSE)
+d2 <- cohen.d(`Fix: Fluctuations du diametre basal (u.a.)` ~ groupe, data = data_FIXATION)
+
+results <- rbind(results, data.frame(
+  Condition = "Fix: Fluctuations du diametre basal (u.a.)",
+  t_value   = round(t2$statistic, 4),
+  df        = round(t2$parameter, 2),
+  p_value   = round(t2$p.value, 15),
+  test_type = "t-test Welch",
+  data_set  = "data_FIXATION",
+  cohen_d   = round(d2$estimate, 3)
+))
+
+
+vars_cat <- c(
+  "Cat: Taux de reconnaissance(%)",
+  "Cat: Taux de bonne categorisation (%)",
+  "Cat: Temps de réponse moyen (ms)",
+  "Cat: Amplitude maximale de dilatation (u.a.)",
+  "Cat: Vitesse de dilatation (u.a./s)",
+  "Cat: Dilatation moyenne (u.a.)",
+  "Cat: Variabilité de dilatation (u.a.)"
+)
+
+for (var in vars_cat) {
+  tmp_data <- data_CATEGORISATION
+  equal_var <- TRUE
+  alternative_type <- "two.sided"  # par défaut bilatéral
+  
+  # Cas particuliers : exclusion du sujet "BAj97" / file issue so we filter it out
+  if (var == "Cat: Taux de bonne categorisation (%)") {
+    tmp_data <- tmp_data %>% filter(`code sujet` != "BAj97")
+    equal_var <- FALSE
+  }
+  
+  if (var == "Cat: Temps de réponse moyen (ms)") {
+    tmp_data <- tmp_data %>% filter(`code sujet` != "BAj97")
+    equal_var <- FALSE
+  }
+  
+  if (var == "Cat: Variabilité de dilatation (u.a.)") {
+    equal_var <- FALSE
+  }
+  
+  # Cas particuliers : tests unilatéraux (less) / Unilateral test
+  if (var %in% c(
+    "Cat: Amplitude maximale de dilatation (u.a.)",
+    "Cat: Vitesse de dilatation (u.a./s)",
+    "Cat: Dilatation moyenne (u.a.)"
+  )) {
+    alternative_type <- "less"
+  }
+  
+  # Test t
+  t_res <- t.test(tmp_data[[var]] ~ tmp_data$groupe, 
+                  var.equal = equal_var, 
+                  alternative = alternative_type)
+  
+  # Taille d’effet
+  d_res <- cohen.d(tmp_data[[var]] ~ tmp_data$groupe)
+  
+  # Ajout des résultats
+  results <- rbind(results, data.frame(
+    Condition = var,
+    t_value   = round(t_res$statistic, 4),
+    df        = round(t_res$parameter, 2),
+    p_value   = round(t_res$p.value, 6),
+    test_type = ifelse(equal_var, 
+                       paste0("t-test (", alternative_type, ")"),
+                       paste0("t-test Welch (", alternative_type, ")")),
+    data_set  = "data_CATEGORISATION",
+    cohen_d   = round(d_res$estimate, 3)
+  ))
+}
+
+
+# ---- Correction FDR ---- FDR Corrected
+results$p_value_corrected <- round(p.adjust(results$p_value, method = "BH"), 15)
+
+# ---- Résultats finaux ---- Final results
+print(results)
+
+
+
+
+```
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%RECOGNITION%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+```{r} 
+# ==========================================================
+# ANOVA : Amplitude maximale de dilatation (Reconnaissance)
+# ANOVA: Maximal pupil dilation amplitude (Recognition task)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# "Condition" devient le facteur intra-sujets, "Valeur" contient la variable dépendante.
+# "Condition" becomes the within-subjects factor, "Valeur" holds the dependent variable.
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Amplitude maximale de dilatation RECOG(u.a.)",
+      "Cat: Amplitude maximale de dilatation FORGOT(u.a.)"
+    ),
+    names_to = "Condition",   # Nouveau nom pour le facteur / New name for the factor
+    values_to = "Valeur"      # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion numérique si nécessaire / Ensure numeric values
+  )
+
+# Création d’un identifiant unique pour chaque participant
+# Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# On teste l’effet de Condition (intra-sujet), du groupe (inter-sujet),
+# et leur interaction, avec une erreur par participant.
+# We test the effect of Condition (within-subjects), Group (between-subjects),
+# and their interaction, with participant-level error terms.
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés (méthode Benjamini-Hochberg)
+# BH-corrected results (Benjamini-Hochberg method, BH = FDR, it's the same)
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse : Condition A > Condition B / Hypothesis: Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse : Condition A < Condition B / Hypothesis: Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# Résultats sans correction / Results without correction
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Extraire uniquement t-value et p-value / Extract only t-value and p-value ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# Sélectionner les colonnes utiles / Select relevant columns
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+
+
+
+
+
+```
+
+
+
+```{r} 
+# ==========================================================
+# ANOVA : Dilatation moyenne (Reconnaissance)
+# ANOVA: Mean pupil dilation (Recognition task)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# On transforme les données de large à long format pour l’ANOVA à mesures répétées.
+# We reshape the dataset from wide to long format for repeated-measures ANOVA.
+# "Condition" devient le facteur intra-sujets, "Valeur" contient la variable dépendante.
+# "Condition" becomes the within-subjects factor, "Valeur" holds the dependent variable.
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Dilatation moyenne RECOG(u.a.)",
+      "Cat: Dilatation moyenne FORGOT(u.a.)"
+    ),
+    names_to = "Condition",   # Nouveau facteur / New factor
+    values_to = "Valeur"      # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+# Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# On teste l’effet de Condition (intra-sujet), du groupe (inter-sujet),
+# et leur interaction, avec une erreur par participant.
+# We test the effect of Condition (within-subjects), Group (between-subjects),
+# and their interaction, with participant-level error terms.
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés (méthode Benjamini-Hochberg)
+# BH-corrected results (Benjamini-Hochberg method)
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less", ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse : Condition A > Condition B / Hypothesis: Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse : Condition A < Condition B / Hypothesis: Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# Résultats sans correction / Results without correction
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Extraire t-value et p-value / Extract t-value and p-value ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# Sélection des colonnes utiles / Select relevant columns
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+
+
+```
+
+
+```{r} 
+# ==========================================================
+# ANOVA : Vitesse de dilatation (Reconnaissance)
+# ANOVA: Pupil dilation velocity (Recognition task)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Transformation des données de wide à long format pour l’ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+# "Condition" devient le facteur intra-sujets, "Valeur" contient la variable dépendante
+# "Condition" becomes the within-subjects factor, "Valeur" holds the dependent variable
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Vitesse de dilatation RECOG(u.a./s)",
+      "Cat: Vitesse de dilatation FORGOT(u.a./s)"
+    ),
+    names_to = "Condition",   # Nouveau facteur / New factor
+    values_to = "Valeur"      # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique par participant / Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# Test de l’effet de Condition, groupe et interaction avec erreur intra-sujet
+# Test the effect of Condition, Group, and their interaction with participant-level error
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse unilatérale : Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse unilatérale : Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# Résultats sans correction / Results without correction
+#summary(post_hoc_unilateral, adjust = "none")
+
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# Sélection des colonnes utiles / Select relevant columns
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+
+
+```
+
+
+```{r}
+# ==========================================================
+# ANOVA : Pre-stimulus baseline diameter (Reconnaissance)
+# ANOVA : Pre-stimulus baseline diameter (Recognition task)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Transformation des données de wide à long format pour l’ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+# "Condition" devient le facteur intra-sujets, "Valeur" contient la variable dépendante
+# "Condition" becomes the within-subjects factor, "Valeur" holds the dependent variable
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Pre-stimulus baseline RECOG(u.a.)",
+      "Cat: Pre-stimulus baseline FORGOT(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique par participant / Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# Test de l’effet de Condition, groupe et interaction avec erreur intra-sujet
+# Test the effect of Condition, Group, and their interaction with participant-level error
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse unilatérale : Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse unilatérale : Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# Résultats sans correction / Results without correction
+#summary(post_hoc_unilateral, adjust = "none")
+
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# Sélection des colonnes utiles / Select relevant columns
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+```
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%CONGRUENCE%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+```{r} 
+# ==========================================================
+# ANOVA : Amplitude maximale (Congruence)
+# ANOVA: Maximal amplitude (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Transformation des données de wide à long format pour ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Amplitude maximale de dilatation CONG(u.a.)",
+      "Cat: Amplitude maximale de dilatation INCONG(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique par participant / Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# Test de l’effet de Condition, groupe et interaction avec erreur intra-sujet
+# Test the effect of Condition, Group, and their interaction with participant-level error
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse unilatérale : Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse unilatérale : Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# Résultats sans correction / Results without correction
+#summary(post_hoc_unilateral, adjust = "none")
+
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# Sélection des colonnes utiles / Select relevant columns
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+
+
+```
+
+
+
+```{r} 
+# ==========================================================
+# ANOVA : Dilatation moyenne (Congruence)
+# ANOVA: Mean pupil dilation (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Transformation des données de wide à long format pour ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Dilatation moyenne CONG(u.a.)",
+      "Cat: Dilatation moyenne INCONG(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique par participant / Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# Test de l’effet de Condition, groupe et interaction avec erreur intra-sujet
+# Test the effect of Condition, Group, and their interaction with participant-level error
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse unilatérale : Condition A > Condition B / One-sided hypothesis: Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse unilatérale : Condition A < Condition B / One-sided hypothesis: Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# ---- Résultats sans correction / Results without correction ----
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+
+```
+
+
+```{r} 
+# ==========================================================
+# ANOVA : Vitesse de dilatation (Congruence)
+# ANOVA: Pupil dilation velocity (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Transformer les données de large à long format pour ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Vitesse de dilatation CONG(u.a./s)",
+      "Cat: Vitesse de dilatation INCONG(u.a./s)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create a unique identifier for each participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+# Test de l’effet de Condition, groupe et interaction avec erreur intra-sujet
+# Test the effect of Condition, Group, and their interaction with participant-level error
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+# Comparaisons multiples entre les niveaux de Condition et groupe
+# Pairwise comparisons between Condition and group
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+# Choisir la direction du test : "greater", "less" ou "both" (bilatéral)
+# Choose test direction: "greater", "less", or "both" (bilateral)
+direction <- "less"
+
+if (direction == "greater") {
+  # Hypothèse unilatérale : Condition A > Condition B / One-sided hypothesis: Condition A > Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  # Hypothèse unilatérale : Condition A < Condition B / One-sided hypothesis: Condition A < Condition B
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  # Bilatéral (par défaut) / Bilateral (default)
+  post_hoc_unilateral <- post_hoc$contrasts
+}
+
+# ---- Résultats sans correction / Results without correction ----
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+```
+
+
+```{r}
+# ==========================================================
+# ANOVA : Temps de réponse moyen (Congruence)
+# ANOVA: Mean response time (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Filtrer un sujet si nécessaire / Filter a subject if needed
+databis <- data_CATEGORISATION %>%
+    filter(`code sujet` != "BAj97")  # Sujet exclu car problème de fichier / Exclude subject due to file issue
+
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+long_data <- databis %>%
+    pivot_longer(
+        cols = c("Cat: Temps de réponse moyen CONG(ms)", "Cat: Temps de réponse moyen INCONG(ms)"), 
+        names_to = "Condition",   # Nouveau facteur / New factor
+        values_to = "Valeur"      # Variable dépendante / Dependent variable
+    ) %>%
+    mutate(
+        Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+        Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+    )
+
+# Création d’un identifiant unique pour chaque participant / Create unique subject ID
+long_data$id <- rep(1:nrow(databis), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+    Valeur ~ Condition * groupe + Error(id / Condition),
+    data = long_data
+)
+
+# Résultats globaux / Global ANOVA results
+summary(anova_model)
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+#print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+    post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+    post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+    post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats sans correction / Results without correction ----
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# Affichage final / Final display
+# ---- Résultats de l'ANOVA / ANOVA results ----
+print(summary(anova_model))
+
+# ---- Résultats post-hoc / Post-hoc results ----
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Taux de bonne catégorisation (Congruence)
+# ANOVA: Correct categorization rate (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Filtrer un sujet si nécessaire / Filter a subject if needed
+databis <- data_CATEGORISATION %>%
+    filter(`code sujet` != "BAj97")  # Sujet exclu car problème de fichier / Exclude subject due to file issue
+
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+# Reshape data from wide to long format for repeated-measures ANOVA
+long_data <- databis %>%
+  pivot_longer(
+    cols = c("Cat: Taux de bonne categorisation CONG(%)", "Cat: Taux de bonne categorisation INCONG(%)"), 
+    names_to = "Condition",   # Nouveau facteur / New factor
+    values_to = "Valeur"      # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),     # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)        # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create unique subject ID
+long_data$id <- rep(1:nrow(databis), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+print(summary(anova_model))
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats sans correction / Results without correction ----
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Taux de reconnaissance (Congruence)
+# ANOVA: Recognition rate (Congruence)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c("Cat: Taux de reconnaissance CONG(%)", "Cat: Taux de reconnaissance INCONG(%)"), 
+    names_to = "Condition",    # Nouveau facteur / New factor
+    values_to = "Valeur"       # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create unique subject ID
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+post_hoc_unilateral <- switch(
+  direction,
+  "greater" = update(post_hoc$contrasts, side = ">"),
+  "less"    = update(post_hoc$contrasts, side = "<"),
+  post_hoc$contrasts  # default = "both"
+)
+
+# ---- Résultats sans correction / Results without correction ----
+cat("\n=== Post-hoc results (uncorrected) ===\n")
+#print(summary(post_hoc_unilateral, adjust = "none"))
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+
+```
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%FOREGROUND%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+```{r} 
+# ==========================================================
+# ANOVA : Amplitude maximale de dilatation (Foreground)
+# ANOVA: Maximal pupil dilation amplitude (Foreground)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Amplitude maximale de dilatation ANI(u.a.)",
+      "Cat: Amplitude maximale de dilatation OBJ(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),   # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)      # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create a unique participant ID
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "greater"  # Options: "greater", "less", "both"
+
+post_hoc_unilateral <- switch(
+  direction,
+  "greater" = update(post_hoc$contrasts, side = ">"),
+  "less"    = update(post_hoc$contrasts, side = "<"),
+  post_hoc$contrasts  # default = "both"
+)
+
+# ---- Résultats sans correction / Results without correction ----
+# summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+
+
+```{r} 
+# ==========================================================
+# ANOVA : Dilatation moyenne (Foreground)
+# ANOVA: Average pupil dilation (Foreground)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Dilatation moyenne ANI(u.a.)",
+      "Cat: Dilatation moyenne OBJ(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),   # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)      # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create a unique participant ID
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "greater"  # Options: "greater", "less", "both"
+
+post_hoc_unilateral <- switch(
+  direction,
+  "greater" = update(post_hoc$contrasts, side = ">"),
+  "less"    = update(post_hoc$contrasts, side = "<"),
+  post_hoc$contrasts  # default = "both"
+)
+
+# ---- Résultats sans correction / Results without correction ----
+# summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+
+```
+
+
+```{r}
+# ==========================================================
+# ANOVA : Vitesse de dilatation (Foreground)
+# ANOVA: Pupil dilation velocity (Foreground)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Vitesse de dilatation ANI(u.a./s)",
+      "Cat: Vitesse de dilatation OBJ(u.a./s)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),   # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)      # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create a unique participant ID
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "greater"  # Options: "greater", "less", "both"
+
+post_hoc_unilateral <- switch(
+  direction,
+  "greater" = update(post_hoc$contrasts, side = ">"),
+  "less"    = update(post_hoc$contrasts, side = "<"),
+  post_hoc$contrasts  # default = "both"
+)
+
+# ---- Résultats sans correction / Results without correction ----
+#summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Temps de réponse moyen (Foreground)
+# ANOVA: Mean response time (Foreground)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+databis <- data_CATEGORISATION %>%
+    filter(`code sujet` != "BAj97")  # Sujet exclu / Exclude subject
+
+long_data <- databis %>%
+  pivot_longer(
+    cols = c("Cat: Temps de réponse moyen ANI(ms)", "Cat: Temps de réponse moyen OBJ(ms)"),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),    # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)       # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant / Create unique subject ID
+long_data$id <- rep(1:nrow(databis), each = 2)
+
+# Vérification rapide / Quick check
+head(long_data)
+
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+
+# ---- Tests directionnels (optionnels) / Directional tests (optional) ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+post_hoc_unilateral <- switch(
+  direction,
+  "greater" = update(post_hoc$contrasts, side = ">"),
+  "less"    = update(post_hoc$contrasts, side = "<"),
+  post_hoc$contrasts  # default = "both"
+)
+
+# ---- Résultats sans correction / Results without correction ----
+# summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Taux de bonne catégorisation (Foreground)
+# ANOVA: Correct categorization rate (Foreground)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+databis <- data_CATEGORISATION %>%
+    filter(`code sujet` != "BAj97")  # file issue so we filter it out
+
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+long_data <- databis %>%
+  pivot_longer(
+    cols = c("Cat: Taux de bonne categorisation ANI(%)", 
+             "Cat: Taux de bonne categorisation OBJ(%)"),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),   # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)      # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(databis), each = 2)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats sans correction / Results without correction ----
+# summary(post_hoc_unilateral, adjust = "none")
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Taux de reconnaissance (Animal vs Furniture)
+# ANOVA: Recognition rate (Animal vs Furniture)
+# ==========================================================
+
+
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c("Cat: Taux de reconnaissance ANI(%)", 
+             "Cat: Taux de reconnaissance OBJ(%)"),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),   # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)      # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 2)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+
+```
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%RKG%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+```{r}
+# ==========================================================
+# ANOVA : Amplitude maximale de dilatation (Recollection vs Familiarity vs Guess)
+# ANOVA: Maximum pupil dilation amplitude (Recollection vs Familiarity vs Guess)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Amplitude maximale de dilatation RECOG R(u.a.)",
+      "Cat: Amplitude maximale de dilatation RECOG K(u.a.)",
+      "Cat: Amplitude maximale de dilatation RECOG G(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 3)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "less"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Dilatation moyenne (Recollection vs Familiarity vs Guess)
+# ANOVA: Mean pupil dilation (Recollection vs Familiarity vs Guess)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Dilatation moyenne RECOG R(u.a.)",
+      "Cat: Dilatation moyenne RECOG K(u.a.)",
+      "Cat: Dilatation moyenne RECOG G(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 3)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "less"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Vitesse de dilatation (Recollection vs Familiarity vs Guess)
+# ANOVA: Pupil dilation velocity (Recollection vs Familiarity vs Guess)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+# Reshape des données de large à long format pour ANOVA à mesures répétées
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Vitesse de dilatation RECOG R(u.a./s)",
+      "Cat: Vitesse de dilatation RECOG K(u.a./s)",
+      "Cat: Vitesse de dilatation RECOG G(u.a./s)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 3)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "less"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Pre-stimulus baseline (Recollection vs Familiarity vs Guess)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Pre-stimulus baseline RECOG R(u.a.)",
+      "Cat: Pre-stimulus baseline RECOG K(u.a.)",
+      "Cat: Pre-stimulus baseline RECOG G(u.a.)"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 3)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "less"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+```{r}
+# ==========================================================
+# ANOVA : Confidence index (Recollection vs Familiarity vs Guess)
+# ==========================================================
+
+# ---- Préparation des données / Data preparation ----
+long_data <- data_CATEGORISATION %>%
+  pivot_longer(
+    cols = c(
+      "Cat: Indice de recollection",
+      "Cat: Indice de familiarite",
+      "Cat: Indice de supposition"
+    ),
+    names_to = "Condition",  # Nouveau facteur / New factor
+    values_to = "Valeur"     # Variable dépendante / Dependent variable
+  ) %>%
+  mutate(
+    Condition = factor(Condition),  # Conversion en facteur / Convert to factor
+    Valeur = as.numeric(Valeur)     # Conversion en numérique / Ensure numeric
+  )
+
+# Création d’un identifiant unique pour chaque participant
+long_data$id <- rep(1:nrow(data_CATEGORISATION), each = 3)
+
+# Vérification rapide des données
+head(long_data)
+
+# ---- ANOVA à mesures répétées / Repeated-measures ANOVA ----
+anova_model <- aov_car(
+  Valeur ~ Condition * groupe + Error(id / Condition),
+  data = long_data
+)
+
+# ---- Résultats globaux / Global ANOVA results ----
+cat("\n=== Résumé global de l'ANOVA / Global ANOVA summary ===\n")
+print(summary(anova_model))
+
+# ---- Comparaisons post-hoc / Post-hoc comparisons ----
+post_hoc <- emmeans(anova_model, pairwise ~ Condition * groupe)
+
+# Résultats corrigés BH / Benjamini-Hochberg corrected results
+post_hoc_contrasts <- summary(post_hoc$contrasts, adjust = "BH")
+# print(post_hoc_contrasts)
+
+# ---- Tests directionnels (optionnels) / Directional tests ----
+direction <- "both"  # Options: "greater", "less", "both"
+
+if (direction == "greater") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = ">")
+} else if (direction == "less") {
+  post_hoc_unilateral <- update(post_hoc$contrasts, side = "<")
+} else {
+  post_hoc_unilateral <- post_hoc$contrasts  # Bilateral / par défaut
+}
+
+# ---- Résultats avec correction BH / Benjamini-Hochberg corrected results ----
+post_hoc_summary <- summary(post_hoc_unilateral, adjust = "BH", infer = TRUE)
+
+# ---- Extraire uniquement t-value et p-value / Extract t-value and p-value only ----
+post_hoc_summary_filtered <- post_hoc_summary[, c("contrast", "df", "t.ratio", "p.value")]
+
+# ---- Affichage final / Final display ----
+cat("\n=== Post-hoc summary (t-value & p-value only) ===\n")
+print(post_hoc_summary_filtered)
+
+
+```
+
+
+
+
+```{r}
+# ==========================================================
+# CORRÉLATIONS DE SPEARMAN PAR GROUPE ("a" et "j")
+# AVEC CORRECTION FDR DANS CHAQUE GROUPE
+# SPEARMAN CORRELATIONS BY GROUP (older (a) and younger (j))
+# WITH FDR CORRECTION IN EACH GROUP
+# ==========================================================
+
+# Variables à corréler / Variables to correlate
+var_x <- "Cat: Taux de reconnaissance(%)"
+var_y <- c(
+  "Cat: Amplitude maximale de dilatation (u.a.)",
+  "Cat: Vitesse de dilatation (u.a./s)",
+  "Cat: Dilatation moyenne (u.a.)"
+)
+
+# Conversion en numérique après nettoyage / Convert to numeric after cleaning
+vars_to_check <- c(var_x, var_y)
+data_CATEGORISATION[vars_to_check] <- lapply(
+  data_CATEGORISATION[vars_to_check],
+  function(x) {
+    # Remplacer les virgules par des points (format FR) / Replace commas with dots
+    x <- gsub(",", ".", x)
+    # Supprimer les espaces inutiles / Remove unnecessary spaces
+    x <- gsub(" ", "", x)
+    # Convertir en numérique / Convert to numeric
+    as.numeric(as.character(x))
+  }
+)
+
+# Vérification du format des variables / Check variable structure
+str(data_CATEGORISATION[vars_to_check])
+
+
+
+# Initialisation du tableau des résultats / Initialize results table
+cor_results <- data.frame(
+  groupe = character(),
+  variable = character(),
+  rho_value = numeric(),  # Spearman coefficient = rho
+  p_value = numeric(),
+  p_value_fdr = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Boucle sur chaque groupe séparément / Loop over each group
+for (grp in c("a", "j")) {
+  
+  # Sous-ensemble du groupe actuel / Subset current group
+  subset_data <- data_CATEGORISATION %>% filter(groupe == grp)
+  
+  # Tableau temporaire pour ce groupe / Temporary results table for this group
+  group_results <- data.frame(
+    variable = character(),
+    rho_value = numeric(),
+    p_value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Boucle sur les variables dépendantes / Loop over dependent variables
+  for (vy in var_y) {
+    
+    # Sélection des lignes complètes / Select complete cases
+    valid_rows <- complete.cases(subset_data[[var_x]], subset_data[[vy]])
+    
+    if (sum(valid_rows) > 2) {
+      # Corrélation de Spearman / Spearman correlation
+      cor_test <- cor.test(
+        subset_data[[var_x]][valid_rows],
+        subset_data[[vy]][valid_rows],
+        method = "spearman",
+        exact = FALSE 
+      )
+      
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = round(cor_test$estimate, 4),
+          p_value = cor_test$p.value
+        )
+      )
+      
+    } else {
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = NA,
+          p_value = NA
+        )
+      )
+    }
+  }
+  
+  # Correction FDR dans le groupe / FDR correction within group
+  group_results$p_value_fdr <- round(p.adjust(group_results$p_value, method = "BH"), 6)
+  
+  # Ajout du nom du groupe / Add group label
+  group_results$groupe <- grp
+  
+  # Fusionner dans le tableau principal / Combine into main results table
+  cor_results <- rbind(cor_results, group_results)
+}
+
+# Réorganisation des colonnes / Reorder columns
+cor_results <- cor_results[, c("groupe", "variable", "rho_value", "p_value", "p_value_fdr")]
+
+# Affichage final / Final display
+cat("\n=== Corrélations de Spearman par groupe (avec correction FDR intra-groupe) ===\n")
+print(cor_results)
+
+```
+
+
+
+```{r}
+# ==========================================================
+# CORRÉLATIONS DE SPEARMAN EXPLORATOIRES
+# AVEC CORRECTION FDR FINALE SUR LES DEUX P-VALUES UNIQUEMENT
+# EXPLORATORY SPEARMAN CORRELATIONS 
+# WITH FINAL FDR CORRECTION ON BOTH P-VALUES ONLY
+# ==========================================================
+
+# Variables à corréler / Variables to correlate
+var_x <- "Cat: Taux de reconnaissance(%)"
+var_y <- c(
+  "Cat: Amplitude minimale de constriction (u.a.)"
+)
+
+# Conversion en numérique après nettoyage / Convert to numeric after cleaning
+vars_to_check <- c(var_x, var_y)
+data_CATEGORISATION[vars_to_check] <- lapply(
+  data_CATEGORISATION[vars_to_check],
+  function(x) {
+    # Remplacer les virgules par des points (format FR) / Replace commas with dots
+    x <- gsub(",", ".", x)
+    # Supprimer les espaces inutiles / Remove unnecessary spaces
+    x <- gsub(" ", "", x)
+    # Convertir en numérique / Convert to numeric
+    as.numeric(as.character(x))
+  }
+)
+
+# Vérification du format des variables / Check variable structure
+str(data_CATEGORISATION[vars_to_check])
+
+# Initialisation du tableau des résultats / Initialize results table
+cor_results <- data.frame(
+  groupe = character(),
+  variable = character(),
+  rho_value = numeric(),  # Spearman coefficient = rho
+  p_value = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Boucle sur chaque groupe séparément / Loop over each group
+for (grp in c("a", "j")) {
+  
+  # Sous-ensemble du groupe actuel / Subset current group
+  subset_data <- data_CATEGORISATION %>% filter(groupe == grp)
+  
+  # Tableau temporaire pour ce groupe / Temporary results table for this group
+  group_results <- data.frame(
+    variable = character(),
+    rho_value = numeric(),
+    p_value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # Boucle sur les variables dépendantes / Loop over dependent variables
+  for (vy in var_y) {
+    
+    # Sélection des lignes complètes / Select complete cases
+    valid_rows <- complete.cases(subset_data[[var_x]], subset_data[[vy]])
+    
+    if (sum(valid_rows) > 2) {
+      # Corrélation de Spearman / Spearman correlation
+      cor_test <- cor.test(
+        subset_data[[var_x]][valid_rows],
+        subset_data[[vy]][valid_rows],
+        method = "spearman",
+        exact = FALSE 
+      )
+      
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = round(cor_test$estimate, 4),
+          p_value = cor_test$p.value
+        )
+      )
+      
+    } else {
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = NA,
+          p_value = NA
+        )
+      )
+    }
+  }
+  
+  # Ajout du nom du groupe / Add group label
+  group_results$groupe <- grp
+  
+  # Fusionner dans le tableau principal / Combine into main results table
+  cor_results <- rbind(cor_results, group_results)
+}
+
+# ==========================================================
+# Correction FDR sur les deux p-values finales uniquement
+# FDR correction on both final p-values only
+# ==========================================================
+
+# Extraction des p-values valides / Extract valid p-values
+valid_p <- cor_results$p_value[!is.na(cor_results$p_value)]
+
+# Application de la correction FDR (méthode Benjamini–Hochberg)
+if (length(valid_p) > 0) {
+  fdr_values <- p.adjust(valid_p, method = "BH")
+  
+  # Réinsertion dans le tableau principal / Insert back into main table
+  cor_results$p_value_fdr <- NA
+  cor_results$p_value_fdr[!is.na(cor_results$p_value)] <- round(fdr_values, 6)
+} else {
+  cor_results$p_value_fdr <- NA
+}
+
+# Réorganisation des colonnes / Reorder columns
+cor_results <- cor_results[, c("groupe", "variable", "rho_value", "p_value", "p_value_fdr")]
+
+# Affichage final / Final display
+cat("\n=== Corrélations de Spearman par groupe (avec correction FDR finale sur les deux p-values) ===\n")
+print(cor_results)
+
+
+```
+
+
+```{r}
+# ==========================================================
+# CORRÉLATIONS DE SPEARMAN PAR GROUPE ("a" et "j")
+# AVEC CORRECTION FDR DANS CHAQUE GROUPE
+# SPEARMAN CORRELATIONS BY GROUP (older (a) and younger (j))
+# WITH FDR CORRECTION IN EACH GROUP
+# ==========================================================
+
+var_x <- "Cat: Pre-stimulus baseline(u.a.)"
+var_y <- c(
+  "Fix: Diametre basal moyen (u.a.)",
+  "Cat: Amplitude maximale de dilatation (u.a.)"
+)
+
+# Conversion en numérique après nettoyage / Convert to numeric after cleaning
+vars_to_check <- c(var_x, var_y)
+data_CATEGORISATION[vars_to_check] <- lapply(
+  data_CATEGORISATION[vars_to_check],
+  function(x) {
+    x <- gsub(",", ".", x)  # Remplacer les virgules par des points / Replace commas with dots
+    x <- gsub(" ", "", x)   # Supprimer les espaces / Remove spaces
+    as.numeric(as.character(x))
+  }
+)
+
+# Vérification du format des variables / Check variable structure
+str(data_CATEGORISATION[vars_to_check])
+
+# ==========================================================
+# INITIALISATION DU TABLEAU DES RÉSULTATS / Initialize results table
+# ==========================================================
+cor_results <- data.frame(
+  groupe = character(),
+  variable = character(),
+  rho_value = numeric(),  # Coefficient de Spearman
+  df = numeric(),         # Degrés de liberté / Degrees of freedom
+  p_value = numeric(),
+  p_value_fdr = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# ==========================================================
+# FONCTION POUR CALCULER LES CORRÉLATIONS DANS UN GROUPE
+# ==========================================================
+compute_spearman <- function(subset_data, grp_label) {
+  group_results <- data.frame(
+    variable = character(),
+    rho_value = numeric(),
+    df = numeric(),
+    p_value = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  for (vy in var_y) {
+    valid_rows <- complete.cases(subset_data[[var_x]], subset_data[[vy]])
+    n_valid <- sum(valid_rows)
+    
+    if (n_valid > 2) {
+      cor_test <- cor.test(
+        subset_data[[var_x]][valid_rows],
+        subset_data[[vy]][valid_rows],
+        method = "spearman",
+        exact = FALSE
+      )
+      
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = round(cor_test$estimate, 4),
+          df = n_valid - 2,  # Degrés de liberté
+          p_value = cor_test$p.value
+        )
+      )
+    } else {
+      group_results <- rbind(
+        group_results,
+        data.frame(
+          variable = vy,
+          rho_value = NA,
+          df = NA,
+          p_value = NA
+        )
+      )
+    }
+  }
+  
+  # Correction FDR pour ce groupe / FDR correction within group
+  group_results$p_value_fdr <- round(p.adjust(group_results$p_value, method = "BH"), 6)
+  
+  # Ajout du nom du groupe / Add group label
+  group_results$groupe <- grp_label
+  
+  return(group_results)
+}
+
+# ==========================================================
+# CALCUL DANS CHAQUE GROUPE
+# ==========================================================
+# Groupe jeunes / Young group
+cor_results <- rbind(
+  cor_results,
+  compute_spearman(data_CATEGORISATION %>% filter(groupe == "j"), "younger")
+)
+
+# Groupe âgés / Older group
+cor_results <- rbind(
+  cor_results,
+  compute_spearman(data_CATEGORISATION %>% filter(groupe == "a"), "older")
+)
+
+# Groupe complet / Full group
+cor_results <- rbind(
+  cor_results,
+  compute_spearman(data_CATEGORISATION, "complete")
+)
+
+# Réorganisation des colonnes / Reorder columns
+cor_results <- cor_results[, c("groupe", "variable", "rho_value", "df", "p_value", "p_value_fdr")]
+
+# Affichage final / Final display
+cat("\n=== Corrélations de Spearman par groupe et pour le groupe complet (avec DF et correction FDR) ===\n")
+print(cor_results)
+
+
+
+```
+
+```{r}
+# ---- T-test pour le groupe a (âgé) (Taux de reconnaissnace >= vs < 0.59) ----
+# ---- T-test for group a (older) (Recognition rate >= vs < 0.59) ----
+
+# Création de la variable de sous-groupe pour le t-test
+# Create the subgroup variable for the t-test
+data_a <- data_CATEGORISATION %>%
+  filter(groupe == "a") %>%
+  mutate(TR_high_low = ifelse(`Cat: Taux de reconnaissance(%)` >= 0.59, "high", "low"))
+
+# Vérifier le nombre de participants dans chaque sous-groupe
+# Check the number of participants in each subgroup
+cat("\n=== Nombre de participants par sous-groupe (groupe a) ===\n")
+print(table(data_a$TR_high_low))
+
+# T-test
+t_a <- t.test(
+  `Cat: Pre-stimulus baseline(u.a.)` ~ TR_high_low,
+  data = data_a,
+  alternative = "two.sided",
+  var.equal = TRUE
+)
+
+# Cohen's d (via effsize::cohen.d)
+# Cohen's d (using effsize::cohen.d)
+d_a <- cohen.d(`Cat: Pre-stimulus baseline(u.a.)` ~ TR_high_low, data = data_a)
+
+# Création du data.frame avec les mêmes colonnes que results
+# Create a data.frame with the same columns as results
+new_row <- data.frame(
+  Condition = "Cat: Pre-stimulus baseline(u.a.) (groupe a: TR >/< 0.59)",
+  t_value   = round(t_a$statistic, 4),
+  df        = round(t_a$parameter, 2),
+  p_value   = round(t_a$p.value, 6),
+  test_type = "t-test (two.sided, var.equal=TRUE)",
+  data_set  = "data_CATEGORISATION",
+  cohen_d   = round(d_a$estimate, 3),
+  p_value_corrected = NA_real_  # ajouter la colonne manquante / add the missing column
+)
+
+# Ajout à la table principale
+# Add to the main results table
+results <- rbind(results, new_row)
+
+cat("\n=== T-test sur Pre-stimulus baseline (groupe a, TR > ou < 0.59) ===\n")
+cat("=== T-test on Pre-stimulus baseline (group a, TR > or < 0.59) ===\n")
+print(t_a)
+cat("\nCohen's d =", round(d_a$estimate, 3), "\n")
+
+
+
+```

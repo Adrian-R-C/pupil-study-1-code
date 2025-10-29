@@ -1,0 +1,82 @@
+﻿# Nom du sujet : EJj03
+# Prénom : EJj03
+# Date de naissance : 01/01/2003
+# Date de la séance : 20/06/2023
+
+
+ani_nat_set2_C_14_eq.bmp;Animal;1045 ms;
+obj_nat_set2_I_08_eq.bmp;Mobilier;505 ms;
+ani_art_set2_I_09_eq.bmp;Animal;680 ms;
+obj_art_set2_C_03_eq.bmp;Mobilier;412 ms;
+obj_art_set2_C_02_eq.bmp;Mobilier;464 ms;
+ani_art_set2_I_06_eq.bmp;Animal;445 ms;
+ani_nat_set2_C_11_eq.bmp;Mobilier;623 ms;
+ani_nat_set2_C_05_eq.bmp;Animal;588 ms;
+obj_nat_set2_I_15_eq.bmp;Mobilier;723 ms;
+obj_nat_set2_I_04_eq.bmp;Mobilier;915 ms;
+obj_art_set2_C_13_eq.bmp;Mobilier;631 ms;
+ani_art_set2_I_02_eq.bmp;Animal;659 ms;
+obj_art_set2_C_17_eq.bmp;Mobilier;528 ms;
+obj_art_set2_C_12_eq.bmp;Mobilier;772 ms;
+ani_art_set2_I_14_eq.bmp;Animal;808 ms;
+obj_nat_set2_I_13_eq.bmp;Mobilier;702 ms;
+ani_nat_set2_C_08_eq.bmp;Animal;468 ms;
+ani_art_set2_I_17_eq.bmp;Animal;663 ms;
+Fin du bloc
+ani_art_set2_I_08_eq.bmp;Animal;808 ms;
+obj_art_set2_C_01_eq.bmp;Mobilier;744 ms;
+ani_art_set2_I_12_eq.bmp;Animal;578 ms;
+ani_art_set2_I_10_eq.bmp;N/A;
+obj_nat_set2_I_07_eq.bmp;Mobilier;881 ms;
+ani_art_set2_I_15_eq.bmp;Animal;616 ms;
+ani_art_set2_I_03_eq.bmp;Animal;762 ms;
+ani_art_set2_I_18_eq.bmp;Animal;682 ms;
+obj_nat_set2_I_02_eq.bmp;Mobilier;481 ms;
+obj_art_set2_C_08_eq.bmp;Mobilier;852 ms;
+obj_nat_set2_I_01_eq.bmp;Mobilier;700 ms;
+ani_nat_set2_C_13_eq.bmp;Animal;561 ms;
+obj_nat_set2_I_05_eq.bmp;Mobilier;963 ms;
+obj_art_set2_C_10_eq.bmp;Mobilier;1097 ms;
+obj_art_set2_C_18_eq.bmp;Mobilier;569 ms;
+ani_art_set2_I_16_eq.bmp;Animal;773 ms;
+obj_art_set2_C_14_eq.bmp;Mobilier;622 ms;
+obj_nat_set2_I_12_eq.bmp;Mobilier;709 ms;
+Fin du bloc
+ani_art_set2_I_01_eq.bmp;Animal;543 ms;
+obj_nat_set2_I_17_eq.bmp;Mobilier;646 ms;
+ani_art_set2_I_05_eq.bmp;Animal;735 ms;
+obj_art_set2_C_11_eq.bmp;Mobilier;756 ms;
+ani_nat_set2_C_02_eq.bmp;Animal;833 ms;
+ani_nat_set2_C_16_eq.bmp;Animal;730 ms;
+obj_art_set2_C_09_eq.bmp;Mobilier;642 ms;
+ani_art_set2_I_11_eq.bmp;Animal;781 ms;
+ani_art_set2_I_04_eq.bmp;Animal;849 ms;
+ani_nat_set2_C_17_eq.bmp;Animal;683 ms;
+ani_nat_set2_C_04_eq.bmp;Animal;564 ms;
+ani_nat_set2_C_15_eq.bmp;Animal;527 ms;
+obj_art_set2_C_04_eq.bmp;Mobilier;525 ms;
+ani_nat_set2_C_10_eq.bmp;Animal;574 ms;
+obj_art_set2_C_15_eq.bmp;Mobilier;690 ms;
+ani_nat_set2_C_03_eq.bmp;Animal;724 ms;
+obj_nat_set2_I_03_eq.bmp;Mobilier;592 ms;
+ani_nat_set2_C_06_eq.bmp;Animal;529 ms;
+Fin du bloc
+ani_nat_set2_C_07_eq.bmp;Animal;742 ms;
+obj_nat_set2_I_14_eq.bmp;Mobilier;615 ms;
+ani_nat_set2_C_01_eq.bmp;Animal;476 ms;
+ani_nat_set2_C_18_eq.bmp;Animal;561 ms;
+obj_nat_set2_I_10_eq.bmp;Mobilier;992 ms;
+obj_nat_set2_I_11_eq.bmp;Mobilier;780 ms;
+ani_art_set2_I_13_eq.bmp;Animal;571 ms;
+obj_art_set2_C_16_eq.bmp;Mobilier;566 ms;
+ani_nat_set2_C_09_eq.bmp;Animal;665 ms;
+obj_art_set2_C_07_eq.bmp;Mobilier;547 ms;
+obj_nat_set2_I_09_eq.bmp;Mobilier;704 ms;
+ani_art_set2_I_07_eq.bmp;Animal;642 ms;
+obj_nat_set2_I_18_eq.bmp;Mobilier;530 ms;
+ani_nat_set2_C_12_eq.bmp;Animal;574 ms;
+obj_art_set2_C_06_eq.bmp;Mobilier;604 ms;
+obj_nat_set2_I_16_eq.bmp;N/A;
+obj_nat_set2_I_06_eq.bmp;Mobilier;629 ms;
+obj_art_set2_C_05_eq.bmp;Mobilier;618 ms;
+Fin du bloc
