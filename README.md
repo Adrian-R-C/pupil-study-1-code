@@ -1,5 +1,7 @@
 Code and instructions for pre-processing and statistical analysis of evoked pupillary responses used in the research paper **Pupillary dynamics reflect age-related changes in memory encoding**. 
 
+Link to the pre-print: https://www.biorxiv.org/content/10.1101/2025.10.23.683937v1
+
 The aim of the EyeCog study (CNRS, ID-RCB 2021-A02686-35) was to investigate the link between pupillary marker and cognitive performance, and how this relationship differed accross two age groups. Pupil data were obtained from the **EyeBrain T2 eyetracker** from Suricog (Paris, France).
 
 All the code was written on **MATLAB**. A graphical interface based on MATLAB's AppDesigner is available for those who don't want to go into the code but would like to reproduce the analyses 😉.
