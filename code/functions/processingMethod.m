@@ -1,4 +1,4 @@
-function [outputSignal, indexModifiedPoints] = processingMethod(inputSignal,structContainingFilteringParameters, diameterOrSurface, detrending)
+function [outputSignal, indexModifiedPoints] = processingMethod(inputSignal,structContainingFilteringParameters, diameterOrSurface, detrending, calibrationFactor)
 % processingMethod processes raw pupillary data by artefact correction, blink detection, filtering, and detrending.
 %
 %   [Y1, Y2] = processingMethod(X1, X2, X3, X4)
@@ -122,9 +122,15 @@ indexModifiedPoints.total=or(indexModifiedPoints.hampel,indexModifiedPoints.inte
 % % Step 4: we eventually replace the interpolated points by NaN
 % outputSignal(logical(indexModifiedPoints.interpolation))=NaN;
 
-%END
 if size(outputSignal, 2) > 1
     outputSignal=outputSignal';
 end
+%We convert arbitrary units to mm
+if diameterOrSurface == "diameter"
+    outputSignal=outputSignal*calibrationFactor;
+else
+    outputSignal=outputSignal*calibrationFactor*calibrationFactor;
+end
+
 end
 

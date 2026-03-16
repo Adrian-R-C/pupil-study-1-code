@@ -92,7 +92,9 @@ plot(timepoints,meanBelowCL, 'Color', app.colors(2,:), 'LineWidth', 2)
 fill([timepoints, fliplr(timepoints)], [AboveCL_LOWER', fliplr(AboveCL_UPPER')], app.colors(1,:), 'FaceAlpha', 0.3, 'LineStyle', 'none');
 fill([timepoints, fliplr(timepoints)], [BelowCL_LOWER', fliplr(BelowCL_UPPER')], app.colors(2,:), 'FaceAlpha', 0.3, 'LineStyle', 'none');
 
-plotGrayAreaSignificance(app, significanceCorrected, -10, 20, timepoints)    
+% plotGrayAreaSignificance(app, significanceCorrected, -10, 20, timepoints)  %a.u.  
+calibrationFactor = 4/313; %4mm/313a.u.
+plotGrayAreaSignificance(app, significanceCorrected, -0.15, 0.4, timepoints)    %mm
 
 legend( "Above CL (n=21)","At CL (n=25)" ) 
 
@@ -145,7 +147,7 @@ h = daboxplot(donnees,'groups',group_inx,'mean',1,'color',c,...
     'xtlabels',condition_names, 'outliers', 0,...
         'scatter',2,'scattersize',100,'scatteralpha',0.6,'boxalpha',0.8);
 
-ylabel('Performance');
+ylabel('Baseline diameter');
 set(gca,'FontSize',12)
 
 % H=sigstar({[1,2]},[p4]);

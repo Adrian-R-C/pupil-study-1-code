@@ -1,4 +1,4 @@
-Code and instructions for pre-processing and statistical analysis of evoked pupillary responses used in the research paper **Pupillary dynamics reflect age-related changes in memory encoding**. 
+Code and instructions for pre-processing and statistical analysis of evoked pupillary responses used in the research paper **Age-related differences in memory encoding as a function of pupillary dynamics**. 
 
 Link to the pre-print: https://www.biorxiv.org/content/10.1101/2025.10.23.683937v1
 

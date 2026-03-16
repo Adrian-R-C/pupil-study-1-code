@@ -5,7 +5,7 @@ output: html_notebook
 
 This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
 
-This is the statistics file for the article entitled "Pupillary dynamics reflect age-related changes in memory encoding"
+This is the statistics file for the article entitled "Age-related differences in memory encoding as a function of pupillary dynamics"
 
 ```{r}
 if (!require("afex")) install.packages("afex")
@@ -25,8 +25,12 @@ library(dplyr)
 library(readxl)
 library(effsize)
 library(ggplot2)
+library(dplyr)
+library(tidyr)
 
-data_full <- read_excel("C:/Users/ruiz/Desktop/Analyses GLM/EyeCog/Vfinal/fullFileToAnalyze.xlsx")
+data_full <- read_excel("//10.10.4.8/predicog/EyeCog/Analyses/Analyses_Adrian/Données GitHub Article Final/stats/fullFileToAnalyze.xlsx")
+View(fullFileToAnalyze)
+
 
 # ---- Création des sous-ensembles ---- Creation of data subsets
 
@@ -2230,7 +2234,7 @@ print(cor_results)
 ```
 
 ```{r}
-# ---- T-test pour le groupe a (âgé) (Taux de reconnaissnace >= vs < 0.59) ----
+# ---- T-test pour le groupe a (âgé) (Taux de reconnaissance >= vs < 0.59) ----
 # ---- T-test for group a (older) (Recognition rate >= vs < 0.59) ----
 
 # Création de la variable de sous-groupe pour le t-test
@@ -2277,7 +2281,59 @@ cat("\n=== T-test sur Pre-stimulus baseline (groupe a, TR > ou < 0.59) ===\n")
 cat("=== T-test on Pre-stimulus baseline (group a, TR > or < 0.59) ===\n")
 print(t_a)
 cat("\nCohen's d =", round(d_a$estimate, 3), "\n")
+```
 
 
+
+
+
+```{r}
+
+
+calibrationFactor <- 4 / 313
+
+vars_all <- c(
+  "Fix: Diametre basal moyen (u.a.)",
+  "Fix: Fluctuations du diametre basal (u.a.)",
+  "Cat: Amplitude maximale de dilatation (u.a.)",
+  "Cat: Vitesse de dilatation (u.a./s)",
+  "Cat: Dilatation moyenne (u.a.)",
+  "Cat: Variabilité de dilatation (u.a.)"
+)
+
+vars_scaled <- c(
+  "Fix: Diametre basal moyen (u.a.)",
+  "Cat: Amplitude maximale de dilatation (u.a.)",
+  "Cat: Vitesse de dilatation (u.a./s)",
+  "Cat: Dilatation moyenne (u.a.)"
+)
+
+t_values <- data_full %>%
+  filter(groupe %in% c("a", "j")) %>%
+  mutate(
+    across(
+      all_of(vars_all),
+      ~ as.numeric(gsub(",", ".", .x))
+    ),
+    across(
+      all_of(vars_scaled),
+      ~ .x * calibrationFactor
+    )
+  ) %>%
+  pivot_longer(
+    cols = all_of(vars_all),
+    names_to = "variable",
+    values_to = "value"
+  ) %>%
+  group_by(variable) %>%
+  summarise(
+    t_value = t.test(value ~ groupe)$statistic,
+    df      = t.test(value ~ groupe)$parameter,
+    p_value = t.test(value ~ groupe)$p.value,
+    .groups = "drop"
+  ) %>%
+  arrange(variable)
+
+  print(t_values)
 
 ```
