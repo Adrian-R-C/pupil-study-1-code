@@ -1,6 +1,6 @@
 Code and instructions for pre-processing and statistical analysis of evoked pupillary responses used in the research paper **Age-related differences in memory encoding as a function of pupillary dynamics**. 
 
-Link to the pre-print: https://www.biorxiv.org/content/10.1101/2025.10.23.683937v1
+Link to the article: https://doi.org/10.1016/j.neurobiolaging.2026.03.007
 
 The aim of the EyeCog study (CNRS, ID-RCB 2021-A02686-35) was to investigate the link between pupillary marker and cognitive performance, and how this relationship differed accross two age groups. Pupil data were obtained from the **EyeBrain T2 eyetracker** from Suricog (Paris, France).
 
